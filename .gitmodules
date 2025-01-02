@@ -1,0 +1,3 @@
+[submodule "third_party_framework/ColossalAI"]
+	path = third_party_framework/ColossalAI
+	url = https://github.com/mlshenkai/ColossalAI.git
