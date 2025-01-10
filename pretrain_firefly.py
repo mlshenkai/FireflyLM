@@ -12,12 +12,12 @@ import os
 import resource
 from contextlib import nullcontext
 import torch
-from fireflyllm.dataset.loader import (
+from fireflyllm.datasets.loader import (
     DataCollatorForSupervisedDataset,
     StatefulDistributedSampler,
     load_tokenized_dataset,
 )
-from fireflyllm.dataset.dummy_dataset import RandomDataset
+from fireflyllm.datasets.dummy_dataset import RandomDataset
 from fireflyllm.utils.ckpt_io import load_checkpoint, save_checkpoints
 from fireflyllm.utils.config_utils import (
     define_experiment_workspace,
@@ -154,7 +154,12 @@ def train(args: argparse.Namespace) -> None:
         #     trust_remote_code=True,
         # )
         config = AutoConfig.from_pretrained(args.pretrained, trust_remote_code=True)
-        model = FireflyForCausalLM(config=config)
+        model = AutoModelForCausalLM.from_config(
+            config,
+            attn_implementation="flash_attention_2",
+            torch_dtype=torch.float16 if args.mixed_precision == "fp16" else torch.bfloat16,
+            trust_remote_code=True)
+        # model = model.to(torch.bfloat16)
         if args.freeze_non_embeds_params:
             freeze_non_embeds_parameters(model)
 
@@ -210,14 +215,15 @@ def train(args: argparse.Namespace) -> None:
     # ======================================================
     # Enhance model optimizer, dataloader lr_scheduler
     # ======================================================
-
+    # default_dtype = torch.float16 if args.mixed_precision == "fp16" else torch.bfloat16
+    # torch.set_default_dtype(default_dtype)
     model, optimizer, _, dataloader, lr_scheduler = booster.boost(
         model=model,
         optimizer=optimizer,
         dataloader=dataloader,
         lr_scheduler=lr_scheduler,
     )
-
+    # torch.set_default_dtype(torch.float)
     coordinator.print_on_master(
         f"Booster init max device memory: {accelerator.max_memory_allocated() / 1024 ** 2:.2f} MB"
     )
@@ -473,6 +479,7 @@ if __name__ == "__main__":
         "--batch_size", type=int, default=2, help="Global Batch size of each process"
     )
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
+    parser.add_argument("--min_lr", type=float, default=2e-5, help="Learning rate")
     parser.add_argument("--max_length", type=int, default=2048, help="Model max length")
     parser.add_argument(
         "--mixed_precision",
