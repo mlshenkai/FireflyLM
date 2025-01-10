@@ -3,10 +3,13 @@
 # @Created Time: 2025/1/3 18:43
 # @File: utils
 # @Email: mlshenkai@163.com
+from typing import Any
+
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 from colossalai.booster import Plugin
+import logging
 
 
 @torch.no_grad()
@@ -26,8 +29,8 @@ def get_model_numel(model: nn.Module) -> int:
 
 
 def format_numel_str(numel: int) -> str:
-    B = 1024**3
-    M = 1024**2
+    B = 1024 ** 3
+    M = 1024 ** 2
     K = 1024
     if numel >= B:
         return f"{numel / B:.2f} B"
@@ -37,3 +40,11 @@ def format_numel_str(numel: int) -> str:
         return f"{numel / K:.2f} K"
     else:
         return f"{numel}"
+
+
+def log_single_rank(logger: logging.Logger, *args: Any, rank: int = 0, **kwargs: Any):
+    if torch.distributed.is_initialized():
+        if torch.distributed.get_rank() == rank:
+            logger.log(*args, **kwargs)
+    else:
+        logger.log(*args, **kwargs)
